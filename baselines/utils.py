@@ -23,6 +23,7 @@ def get_labels() -> dict:
         'NotMentioned': 0,
         'Entailment': 1,
         'Contradiction': 2,
+        'Ignore': 3,
     }
 
 def get_hypothesis(data: dict) -> list:
