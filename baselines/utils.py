@@ -8,9 +8,10 @@ cfg = {
     'train_path': 'train.json',
     'test_path': 'test.json',
     'dev_path': 'dev.json',
-    # 'train_path' : '/content/drive/MyDrive/ANLP/Project/Dataset/train.json',
-    # 'test_path' : '/content/drive/MyDrive/ANLP/Project/Dataset/test.json',
-    # 'dev_path' : '/content/drive/MyDrive/ANLP/Project/Dataset/dev.json'
+    "model_name": "bert-base-uncased",
+    "max_length": 512,
+    "models_save_dir": "/scratch/shu7bh/contract_nli/models",
+    "dataset_dir": "/scratch/shu7bh/contract_nli/dataset",
 }
 
 def load_data(path: str) -> json:
