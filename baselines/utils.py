@@ -4,7 +4,7 @@ from nltk import word_tokenize
 import re
 
 cfg = {
-    'DIR': '../dataset/',
+    'raw_data_dir': '../dataset/',
     'train_path': 'train.json',
     'test_path': 'test.json',
     'dev_path': 'dev.json',
@@ -15,7 +15,7 @@ cfg = {
 }
 
 def load_data(path: str) -> json:
-    with open(os.path.join(cfg['DIR'], path), 'r') as f:
+    with open(path, 'r') as f:
         data = json.load(f)
     return data
 
