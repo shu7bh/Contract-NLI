@@ -5,6 +5,8 @@ __pycache__/
 wandb/
 results/
 
+artifacts/
+
 # C extensions
 *.so
 
