@@ -59,6 +59,7 @@ def get_hypothesis_idx(hypothesis_name):
 
 # %%
 from torch.utils.data import Dataset
+import random
 import torch
 
 class NLIDataset(Dataset):
@@ -112,6 +113,15 @@ class NLIDataset(Dataset):
 
         for nda_name, nda_desc in hypothesis.items():
             for i, context in enumerate(contexts):
+
+                nli_label = label_dict[documents[context['doc_id']]['annotation_sets'][0]['annotations'][nda_name]['choice']]
+
+                if nli_label == label_dict['NotMentioned'] and random.random() > 0.04:
+                    continue
+
+                if nli_label == label_dict['Entailment'] and random.random() > 0.34:
+                    continue
+
                 data_point = {}
                 data_point['hypotheis'] = nda_desc
                 cur_premise = ""
@@ -127,8 +137,13 @@ class NLIDataset(Dataset):
                 span_labels = []
 
                 for span in context['spans']:
+                    val = int(span['span_id'] in documents[context['doc_id']]['annotation_sets'][0]['annotations'][nda_name]['spans'])
+
+                    if val == 0 and random.random() > 0.1:
+                        continue
+
                     if span['marked']:
-                        span_labels.append(int(span['span_id'] in documents[context['doc_id']]['annotation_sets'][0]['annotations'][nda_name]['spans']))
+                        span_labels.append(val)
                         span_ids.append(span['span_id'])
 
                     cur_premise += ' [SPAN] '
@@ -138,10 +153,10 @@ class NLIDataset(Dataset):
 
                 data_point['premise'] = cur_premise
 
-                nli_label = label_dict[documents[context['doc_id']]['annotation_sets'][0]['annotations'][nda_name]['choice']]
+                # nli_label = label_dict[documents[context['doc_id']]['annotation_sets'][0]['annotations'][nda_name]['choice']]
 
                 if not evidence and nli_label != label_dict['NotMentioned']:
-                    nli_label = label_dict['Ignore']
+                    continue
 
                 data_point['nli_label'] = torch.tensor(nli_label, dtype=torch.long)
                 data_point['span_labels'] = torch.tensor(span_labels, dtype=torch.long)
@@ -206,16 +221,16 @@ train_data = train_data['documents']
 dev_data = dev_data['documents']
 test_data = test_data['documents']
 
-train_data = train_data[:100]
-dev_data = dev_data[:100]
-test_data = test_data[:100]
+# train_data = train_data[:100]
+# dev_data = dev_data[:100]
+# test_data = test_data[:100]
 
 ic.disable()
 
 ic(len(train_data), len(dev_data), len(test_data))
-train_dataset = NLIDataset(train_data, tokenizer, hypothesis, [1000, 1100, 1200], 50)
-dev_dataset = NLIDataset(dev_data, tokenizer, hypothesis, [1000, 1100, 1200], 50)
-test_dataset = NLIDataset(test_data, tokenizer, hypothesis, [1000, 1100, 1200], 50)
+train_dataset = NLIDataset(train_data, tokenizer, hypothesis, [1000, 1100, 1200, 1300, 1400, 1500], 50)
+dev_dataset = NLIDataset(dev_data, tokenizer, hypothesis, [1000, 1100, 1200, 1300, 1400, 1500], 50)
+test_dataset = NLIDataset(test_data, tokenizer, hypothesis, [1000, 1100, 1200, 1300, 1400, 1500], 50)
 
 ic.enable()
 
@@ -224,15 +239,66 @@ del dev_data
 del test_data
 del hypothesis
 # save the datasets
-torch.save(train_dataset, os.path.join(cfg['dataset_dir'], 'train_dataset.pt'))
-torch.save(dev_dataset, os.path.join(cfg['dataset_dir'], 'dev_dataset.pt'))
-torch.save(test_dataset, os.path.join(cfg['dataset_dir'], 'test_dataset.pt'))
+# torch.save(train_dataset, os.path.join(cfg['dataset_dir'], 'train_dataset.pt'))
+# torch.save(dev_dataset, os.path.join(cfg['dataset_dir'], 'dev_dataset.pt'))
+# torch.save(test_dataset, os.path.join(cfg['dataset_dir'], 'test_dataset.pt'))
+
+# %%
+ic(len(train_dataset), len(dev_dataset), len(test_dataset))
+
+# %%
+# zero_ct = 0
+# one_ct = 0
+
+# for x in train_dataset:
+#     if x['nli_label'] == 1 or x['nli_label'] == 2:
+#         for i in x['span_labels']:
+#             if i == 0:
+#                 zero_ct += 1
+#             else:
+#                 one_ct += 1
+
+# ic(zero_ct, one_ct)
+
+# zero_ct = 0
+# one_ct = 0
+
+# for x in dev_dataset:
+#     if x['nli_label'] == 1 or x['nli_label'] == 2:
+#         for i in x['span_labels']:
+#             if i == 0:
+#                 zero_ct += 1
+#             else:
+#                 one_ct += 1
+
+# ic(zero_ct, one_ct)
+
+# zero_ct = 0
+# one_ct = 0
+
+# for x in test_dataset:
+#     if x['nli_label'] == 1 or x['nli_label'] == 2:
+#         for i in x['span_labels']:
+#             if i == 0:
+#                 zero_ct += 1
+#             else:
+#                 one_ct += 1
+
+# ic(zero_ct, one_ct)
+
+# %%
+# # how many datapoints have no evidence
+# from collections import Counter
+
+# ic(Counter([x['nli_label'].item() for x in train_dataset]))
+# ic(Counter([x['nli_label'].item() for x in dev_dataset]))
+# ic(Counter([x['nli_label'].item() for x in test_dataset]))
 
 # %%
 # load the datasets
-train_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'train_dataset.pt'))
-dev_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'dev_dataset.pt'))
-test_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'test_dataset.pt'))
+# train_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'train_dataset.pt'))
+# dev_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'dev_dataset.pt'))
+# test_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'test_dataset.pt'))
 
 # %%
 cfg
@@ -270,15 +336,15 @@ class ContractNLI(PreTrainedModel):
         self.span_criterion = nn.BCEWithLogitsLoss()
 
         self.span_classifier = nn.Sequential(
-            nn.Linear(self.embedding_dim, self.embedding_dim // 2),
+            nn.Linear(self.embedding_dim, self.embedding_dim * 2),
             nn.ReLU(),
-            nn.Linear(self.embedding_dim // 2, 1)
+            nn.Linear(self.embedding_dim * 2, 1)
         )
 
         self.nli_classifier = nn.Sequential(
-            nn.Linear(self.embedding_dim, self.embedding_dim // 2),
+            nn.Linear(self.embedding_dim, self.embedding_dim * 2),
             nn.ReLU(),
-            nn.Linear(self.embedding_dim // 2, self.num_labels)
+            nn.Linear(self.embedding_dim * 2, self.num_labels)
         )
 
         # initialize weights
@@ -321,16 +387,52 @@ class ContractNLITrainer(Trainer):
         outputs = model(**inputs)
         span_logits, nli_logits = outputs[0], outputs[1]
 
-        span_loss = self.model.span_criterion(span_logits, span_label.reshape(-1, 1).float())
+        true_span_labels = []
+        pred_span_labels = []
+
+        start_index = 0
+        end_index = 0
+
+        for i, span_index_row in enumerate(inputs['span_indices']):
+            # find first zero index
+            first_zero_index = torch.where(span_index_row == 0)[0]
+
+            if len(first_zero_index) == 0:
+                first_zero_index = len(span_index_row)
+            else:
+                first_zero_index = first_zero_index[0].item()
+            end_index += first_zero_index
+
+            if nli_label[i] != get_labels()['Ignore']:
+                if nli_label[i] != get_labels()['NotMentioned']:
+                    true_span_labels.extend(span_label[start_index:end_index].tolist())
+                    pred_span_labels.extend(span_logits[start_index:end_index].tolist())
+
+            start_index = end_index
+
+        true_span_labels = torch.tensor(true_span_labels, dtype=torch.float32, device=DEVICE)
+        pred_span_labels = torch.tensor(pred_span_labels, dtype=torch.float32, device=DEVICE)
+
+        true_span_labels = true_span_labels.view(-1)
+        pred_span_labels = pred_span_labels.view(-1)
+
+        if len(true_span_labels) == 0 or len(pred_span_labels) != len(true_span_labels):
+            span_loss = torch.tensor(0, dtype=torch.float32, device=DEVICE)
+        else:
+            span_loss = self.model.span_criterion(pred_span_labels, true_span_labels)
+
         nli_loss = self.model.nli_criterion(nli_logits, nli_label)
 
         if torch.isnan(nli_loss):
             nli_loss = torch.tensor(0, dtype=torch.float32, device=DEVICE)
 
+        if torch.isnan(span_loss):
+            span_loss = torch.tensor(0, dtype=torch.float32, device=DEVICE)
+
         loss = span_loss + self.model.lambda_ * nli_loss
 
-        if torch.isnan(loss):
-            print("here")
+        if loss.item() == 0:
+            loss = torch.tensor(0, dtype=torch.float32, device=DEVICE, requires_grad=True)
 
         return (loss, outputs) if return_outputs else loss
 
@@ -372,17 +474,19 @@ from transformers import TrainingArguments
 training_args = TrainingArguments(
     auto_find_batch_size=True,
     output_dir=cfg['results_dir'],   # output directory
-    num_train_epochs=15,            # total number of training epochs
+    num_train_epochs=10,            # total number of training epochs
     gradient_accumulation_steps=4,   # number of updates steps to accumulate before performing a backward/update pass
-    logging_strategy='epoch',
-    # eval_steps=0.25,
-    # save_steps=0.25,
-    evaluation_strategy='epoch',
-    save_strategy='epoch',
+    logging_strategy='steps',
+    eval_steps=250,
+    save_steps=250,
+    logging_steps=250,
+    evaluation_strategy='steps',
+    save_strategy='steps',
     save_total_limit=2,
     load_best_model_at_end=True,
     fp16=True,
     label_names=['nli_label', 'span_labels', 'data_for_metrics'],
+    # report_to='none',
     report_to='wandb',
 )
 
@@ -424,7 +528,7 @@ trainer = ContractNLITrainer(
     train_dataset=train_dataset,         # training dataset
     eval_dataset=dev_dataset,            # evaluation dataset
     data_collator=ContractNLITrainer.collate_fn,
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=1, early_stopping_threshold=0.01)],
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=2, early_stopping_threshold=0.001)],
     model_init=model_init,
 )
 
