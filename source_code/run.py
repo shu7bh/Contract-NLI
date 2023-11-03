@@ -336,13 +336,17 @@ class ContractNLI(PreTrainedModel):
         self.span_criterion = nn.BCEWithLogitsLoss()
 
         self.span_classifier = nn.Sequential(
-            nn.Linear(self.embedding_dim, self.embedding_dim * 2),
+            nn.Linear(self.embedding_dim, self.embedding_dim * 4),
+            nn.ReLU(),
+            nn.Linear(self.embedding_dim * 4, self.embedding_dim * 2),
             nn.ReLU(),
             nn.Linear(self.embedding_dim * 2, 1)
         )
 
         self.nli_classifier = nn.Sequential(
-            nn.Linear(self.embedding_dim, self.embedding_dim * 2),
+            nn.Linear(self.embedding_dim, self.embedding_dim * 4),
+            nn.ReLU(),
+            nn.Linear(self.embedding_dim * 4, self.embedding_dim * 2),
             nn.ReLU(),
             nn.Linear(self.embedding_dim * 2, self.num_labels)
         )
@@ -474,12 +478,12 @@ from transformers import TrainingArguments
 training_args = TrainingArguments(
     auto_find_batch_size=True,
     output_dir=cfg['results_dir'],   # output directory
-    num_train_epochs=10,            # total number of training epochs
+    num_train_epochs=100,            # total number of training epochs
     gradient_accumulation_steps=4,   # number of updates steps to accumulate before performing a backward/update pass
     logging_strategy='steps',
-    eval_steps=250,
-    save_steps=250,
-    logging_steps=250,
+    eval_steps=400,
+    save_steps=400,
+    logging_steps=400,
     evaluation_strategy='steps',
     save_strategy='steps',
     save_total_limit=2,
@@ -528,7 +532,7 @@ trainer = ContractNLITrainer(
     train_dataset=train_dataset,         # training dataset
     eval_dataset=dev_dataset,            # evaluation dataset
     data_collator=ContractNLITrainer.collate_fn,
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=2, early_stopping_threshold=0.001)],
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=5, early_stopping_threshold=0.0001)],
     model_init=model_init,
 )
 

@@ -6,7 +6,7 @@ wandb/
 results/
 
 source_code/batch_script.sh
-source_code/slurm*.out
+batch.out
 
 artifacts/
 
