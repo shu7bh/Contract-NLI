@@ -4,15 +4,6 @@ import logging as log
 log.basicConfig(level=log.DEBUG)
 
 # %%
-# model = AutoModelForMaskedLM.from_pretrained(artifact_dir)
-
-# %%
-# import wandb
-# run = wandb.init()
-# artifact = run.use_artifact('contract-nli-db/contract-nli/checkpoint:v1', type='model')
-# artifact_dir = artifact.download()
-
-# %%
 import sys
 sys.path.append('../')
 from baselines.utils import *
@@ -116,12 +107,6 @@ class NLIDataset(Dataset):
 
                 nli_label = label_dict[documents[context['doc_id']]['annotation_sets'][0]['annotations'][nda_name]['choice']]
 
-                # if nli_label == label_dict['NotMentioned'] and random.random() > 0.04:
-                #     continue
-
-                # if nli_label == label_dict['Entailment'] and random.random() > 0.34:
-                #     continue
-
                 data_point = {}
                 data_point['hypotheis'] = nda_desc
                 cur_premise = ""
@@ -138,7 +123,8 @@ class NLIDataset(Dataset):
 
                 for span in context['spans']:
                     val = int(span['span_id'] in documents[context['doc_id']]['annotation_sets'][0]['annotations'][nda_name]['spans'])
-                    val = 2*val - 1 # 0 -> -1, 1 -> 1 where 1 is evidence and -1 is not evidence
+
+                    val = 2 * val - 1 # making 0 -> -1 and 1 -> 1
 
                     if span['marked']:
                         span_labels.append(val)
@@ -148,9 +134,6 @@ class NLIDataset(Dataset):
                     cur_premise += documents[context['doc_id']]['text'][span['start_char_idx']:span['end_char_idx']]
 
                 data_point['premise'] = cur_premise
-
-                # if not evidence and nli_label != label_dict['NotMentioned']:
-                #     data      
                 
                 if nli_label == get_labels()['NotMentioned']:
                     span_labels = torch.zeros(len(span_labels), dtype=torch.long)
@@ -302,21 +285,29 @@ ic(len(train_dataset), len(dev_dataset), len(test_dataset))
 # %%
 from sklearn.utils.class_weight import compute_class_weight
 import numpy as np
-nli_labels = [x['nli_label'].item() for x in train_dataset]
+
+def get_class_weights(dataset):
+    nli_labels = [x['nli_label'] for x in dataset]
+
+    span_labels = []
+    for x in dataset:
+        span_labels.extend(x['span_labels'].tolist())
+
+    nli_weights = compute_class_weight('balanced', classes=np.unique(nli_labels), y=np.array(nli_labels))
+
+    nli_weights = nli_weights.tolist()
+
+    span_labels = [x for x in span_labels if x != -1]
+    span_labels = np.array(span_labels)
+    span_weight = np.sum(span_labels == 0) / np.sum(span_labels)
+
+    return nli_weights, span_weight
 
 # %%
-from collections import Counter
-
-Counter(nli_labels)
+nli_weights, span_weight = get_class_weights(train_dataset)
 
 # %%
-ic(np.unique(nli_labels))
-
-
-nli_weights = compute_class_weight('balanced', classes=np.unique(nli_labels), y=np.array(nli_labels))
-
-# %%
-nli_weights
+nli_weights, span_weight
 
 # %%
 # span_labels = []
@@ -325,30 +316,7 @@ nli_weights
 #     span_labels.extend(x['span_labels'].tolist())
 
 # %%
-# Counter(span_labels)
-
-# %%
 # span_weights = compute_class_weight('balanced', classes=np.unique(span_labels), y=np.array(span_labels))
-
-# %%
-# np.unique(span_labels)
-
-# %%
-# span_weights
-
-# %%
-# # how many datapoints have no evidence
-# from collections import Counter
-
-# ic(Counter([x['nli_label'].item() for x in train_dataset]))
-# ic(Counter([x['nli_label'].item() for x in dev_dataset]))
-# ic(Counter([x['nli_label'].item() for x in test_dataset]))
-
-# %%
-# load the datasets
-# train_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'train_dataset.pt'))
-# dev_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'dev_dataset.pt'))
-# test_dataset = torch.load(os.path.join(cfg['dataset_dir'], 'test_dataset.pt'))
 
 # %%
 cfg
@@ -357,11 +325,15 @@ cfg
 from transformers import PreTrainedModel, PretrainedConfig
 
 class ContractNLIConfig(PretrainedConfig):
-    def __init__(self, lambda_ = 1, bert_model_name = cfg['model_name'], num_labels = len(get_labels()), **kwargs):
+    # def __init__(self, lambda_ = 1, bert_model_name = cfg['model_name'], num_labels = len(get_labels()), ignore_span_label = 2, nli_weights = nli_weights, span_weight = span_weight, **kwargs):
+    def __init__(self, nli_weights = [1, 1, 1], span_weight = 1, lambda_ = 1, bert_model_name = cfg['model_name'], num_labels = len(get_labels()), ignore_span_label = 2, **kwargs):
         super().__init__(**kwargs)
         self.bert_model_name = bert_model_name
         self.num_labels = num_labels
         self.lambda_ = lambda_
+        self.ignore_span_label = ignore_span_label
+        self.nli_weights = nli_weights
+        self.span_weight = span_weight
 
 # %%
 from transformers import AutoModel
@@ -381,8 +353,8 @@ class ContractNLI(PreTrainedModel):
         self.embedding_dim = self.bert.config.hidden_size
         self.num_labels = config.num_labels
         self.lambda_ = config.lambda_
-        self.nli_criterion = nn.CrossEntropyLoss(weight=torch.tensor(nli_weights, dtype=torch.float32))
-        self.span_criterion = nn.BCEWithLogitsLoss()
+        self.nli_criterion = nn.CrossEntropyLoss(weight=torch.tensor(self.config.nli_weights, dtype=torch.float32))
+        self.span_criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(self.config.span_weight, dtype=torch.float32))
 
         self.span_classifier = nn.Sequential(
             nn.Linear(self.embedding_dim, self.embedding_dim * 4),
@@ -556,9 +528,9 @@ def wandb_hp_space(trial):
 # %%
 def model_init(trial):
     if trial is None:
-        return ContractNLI(ContractNLIConfig())
+        return ContractNLI(ContractNLIConfig(nli_weights=nli_weights, span_weight=span_weight))
 
-    return ContractNLI(ContractNLIConfig(lambda_=trial['lambda_']))
+    return ContractNLI(ContractNLIConfig(nli_weights=nli_weights, span_weight=span_weight, lambda_=trial['lambda_']))
 
 # %%
 # config = ContractNLIConfig()
