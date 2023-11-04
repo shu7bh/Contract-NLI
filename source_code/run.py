@@ -193,34 +193,29 @@ class NLIDataset(Dataset):
 # %%
 train_data = load_data(os.path.join(cfg['raw_data_dir'], cfg['train_path']))
 dev_data = load_data(os.path.join(cfg['raw_data_dir'], cfg['dev_path']))
-test_data = load_data(os.path.join(cfg['raw_data_dir'], cfg['test_path']))
 
 hypothesis = get_hypothesis(train_data)
 
 train_data = train_data['documents']
 dev_data = dev_data['documents']
-test_data = test_data['documents']
 
-train_data = train_data[:100]
-dev_data = dev_data[:100]
-test_data = test_data[:100]
+train_data = train_data[:len(train_data) // 5]
+dev_data = dev_data[:len(dev_data) // 5]
 
 ic.disable()
 
-ic(len(train_data), len(dev_data), len(test_data))
+ic(len(train_data), len(dev_data))
 train_dataset = NLIDataset(train_data, tokenizer, hypothesis, [1000, 1100, 1200], 50)
 dev_dataset = NLIDataset(dev_data, tokenizer, hypothesis, [1000, 1100, 1200], 50)
-test_dataset = NLIDataset(test_data, tokenizer, hypothesis, [1000, 1100, 1200], 50)
 
 ic.enable()
 
 del train_data
 del dev_data
-del test_data
 del hypothesis
 
 # %%
-ic(len(train_dataset), len(dev_dataset), len(test_dataset))
+ic(len(train_dataset), len(dev_dataset))
 
 # %%
 
@@ -307,7 +302,7 @@ def get_class_weights(dataset):
 nli_weights, span_weight = get_class_weights(train_dataset)
 
 # %%
-nli_weights, span_weight
+ic(nli_weights, span_weight)
 
 # %%
 # span_labels = []
@@ -353,6 +348,10 @@ class ContractNLI(PreTrainedModel):
         self.embedding_dim = self.bert.config.hidden_size
         self.num_labels = config.num_labels
         self.lambda_ = config.lambda_
+
+        ic(self.config.nli_weights)
+        ic(self.config.span_weight)
+
         self.nli_criterion = nn.CrossEntropyLoss(weight=torch.tensor(self.config.nli_weights, dtype=torch.float32))
         self.span_criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(self.config.span_weight, dtype=torch.float32))
 
@@ -424,11 +423,6 @@ class ContractNLITrainer(Trainer):
         span_label = span_label.view(-1)
         span_logits = span_logits.view(-1)        
 
-        # if len(true_span_labels) == 0 or len(pred_span_labels) != len(true_span_labels):
-        #     span_loss = torch.tensor(0, dtype=torch.float32, device=DEVICE)
-        # else:
-        #     span_loss = self.model.span_criterion(pred_span_labels, true_span_labels)
-        
         if len(span_label) == 0:
             span_loss = torch.tensor(0, dtype=torch.float32, device=DEVICE)
         else:
@@ -490,12 +484,12 @@ training_args = TrainingArguments(
     output_dir=cfg['results_dir'],   # output directory
     num_train_epochs=20,            # total number of training epochs
     gradient_accumulation_steps=4,   # number of updates steps to accumulate before performing a backward/update pass
-    logging_strategy='steps',
-    eval_steps=1000,
-    save_steps=1000,
-    logging_steps=1000,
-    evaluation_strategy='steps',
-    save_strategy='steps',
+    logging_strategy='epoch',
+    # eval_steps=1000,
+    # save_steps=1000,
+    # logging_steps=1000,
+    evaluation_strategy='epoch',
+    save_strategy='epoch',
     save_total_limit=2,
     load_best_model_at_end=True,
     fp16=True,
