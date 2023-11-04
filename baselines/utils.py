@@ -10,9 +10,9 @@ cfg = {
     'dev_path': 'dev.json',
     "model_name": "bert-base-uncased",
     "max_length": 512,
-    "models_save_dir": "/scratch/shu7bh/contract_nli/models",
-    "dataset_dir": "/scratch/shu7bh/contract_nli/dataset",
-    "results_dir": "/scratch/shu7bh/contract_nli/results",
+    "models_save_dir": "./scratch/shu7bh/contract_nli/models",
+    "dataset_dir": "./scratch/shu7bh/contract_nli/dataset",
+    "results_dir": "./scratch/shu7bh/contract_nli/results",
 }
 
 def load_data(path: str) -> json:
