@@ -199,8 +199,8 @@ hypothesis = get_hypothesis(train_data)
 train_data = train_data['documents']
 dev_data = dev_data['documents']
 
-train_data = train_data[:len(train_data) // 5]
-dev_data = dev_data[:len(dev_data) // 5]
+train_data = train_data[:len(train_data) // 10]
+dev_data = dev_data[:len(dev_data) // 10]
 
 ic.disable()
 
@@ -345,22 +345,14 @@ class ContractNLI(PreTrainedModel):
         for param in self.bert.parameters():
             param.requires_grad = False
 
-        for name, param in self.bert.named_parameters():
-            if name.startswith('encoder.layer.11') or name.startswith('encoder.layer.10'):
-                param.requires_grad = True
-
         self.embedding_dim = self.bert.config.hidden_size
         self.num_labels = config.num_labels
         self.lambda_ = config.lambda_
-
-        ic(self.config.nli_weights)
-        ic(self.config.span_weight)
-
         self.nli_criterion = nn.CrossEntropyLoss(weight=torch.tensor(self.config.nli_weights, dtype=torch.float32))
         self.span_criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(self.config.span_weight, dtype=torch.float32))
 
         self.span_classifier = nn.Sequential(
-            nn.Linear(self.embedding_dim, self.embedding_dim * 4),
+            nn.Linear(self.embedding_dim * 4, self.embedding_dim * 4),
             nn.ReLU(),
             nn.Linear(self.embedding_dim * 4, self.embedding_dim * 2),
             nn.ReLU(),
@@ -368,7 +360,7 @@ class ContractNLI(PreTrainedModel):
         )
 
         self.nli_classifier = nn.Sequential(
-            nn.Linear(self.embedding_dim, self.embedding_dim * 4),
+            nn.Linear(self.embedding_dim * 4, self.embedding_dim * 4),
             nn.ReLU(),
             nn.Linear(self.embedding_dim * 4, self.embedding_dim * 2),
             nn.ReLU(),
@@ -390,7 +382,10 @@ class ContractNLI(PreTrainedModel):
             module.bias.data.zero_()
 
     def forward(self, input_ids, attention_mask, token_type_ids, span_indices):
-        outputs = self.bert(input_ids, attention_mask, token_type_ids, output_hidden_states=True).hidden_states[-1]
+        outputs = self.bert(input_ids, attention_mask, token_type_ids, output_hidden_states=True).hidden_states[-4:]
+        outputs = torch.stack(outputs, dim=0) # 4, 8, 512, 724
+        outputs = outputs.permute([1, 2, 0, 3]) # 8, 512, 4, 724
+        outputs = outputs.reshape([outputs.shape[0], outputs.shape[1], -1]) # 8, 512, 2896
 
         gather = torch.gather(outputs, 1, span_indices.unsqueeze(2).expand(-1, -1, outputs.shape[-1]))
 
