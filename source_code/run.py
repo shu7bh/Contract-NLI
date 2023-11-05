@@ -345,6 +345,10 @@ class ContractNLI(PreTrainedModel):
         for param in self.bert.parameters():
             param.requires_grad = False
 
+        for name, param in self.bert.named_parameters():
+            if name.startswith('encoder.layer.11') or name.startswith('encoder.layer.10'):
+                param.requires_grad = True
+
         self.embedding_dim = self.bert.config.hidden_size
         self.num_labels = config.num_labels
         self.lambda_ = config.lambda_
